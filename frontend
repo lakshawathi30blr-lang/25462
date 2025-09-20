@@ -1,0 +1,180 @@
+import streamlit as st
+import backend as backend
+from datetime import date
+
+# Set page configuration
+st.set_page_config(
+    page_title="Performance Management System",
+    page_icon="📊",
+    layout="wide"
+)
+
+# --- App Header ---
+st.title("📊 Performance Management System")
+st.markdown("A simple tool to track team performance and goals.")
+
+# --- Sidebar Navigation ---
+st.sidebar.header("Navigation")
+menu_selection = st.sidebar.radio("Go to", ["Dashboard", "Manage Goals", "Manage Tasks", "Business Insights"])
+
+# Hardcoded Employee/Manager IDs for demonstration
+# In a real app, this would be handled with a proper authentication system.
+employee_id = 1
+manager_id = 2
+
+# --- Dashboard Section ---
+if menu_selection == "Dashboard":
+    st.header("Employee Dashboard")
+    st.write(f"Logged in as Employee ID: **{employee_id}**")
+
+    st.subheader("My Goals")
+    my_goals = backend.get_goals(employee_id)
+    if my_goals:
+        for goal in my_goals:
+            with st.expander(f"Goal ID: {goal['goal_id']} - {goal['description']}", expanded=True):
+                st.markdown(f"**Status:** `{goal['status']}`")
+                st.markdown(f"**Due Date:** {goal['due_date'].strftime('%B %d, %Y')}")
+                
+                # Display Tasks for this goal
+                st.write("**Tasks**")
+                tasks = backend.get_tasks(goal['goal_id'])
+                if tasks:
+                    for task in tasks:
+                        st.write(f"- {task['description']} (`{task['status']}`)")
+                else:
+                    st.info("No tasks logged yet.")
+                
+                # Display Feedback for this goal
+                st.write("**Feedback**")
+                feedback_list = backend.get_feedback(goal['goal_id'])
+                if feedback_list:
+                    for feedback in feedback_list:
+                        st.info(f"**Manager Feedback:** {feedback['feedback_text']}")
+                else:
+                    st.info("No feedback available yet.")
+    else:
+        st.info("You have no goals assigned.")
+
+# --- Manage Goals Section (Manager View) ---
+elif menu_selection == "Manage Goals":
+    st.header("Manager: Manage Employee Goals")
+    st.write(f"Logged in as Manager ID: **{manager_id}**")
+    
+    st.subheader("Set a New Goal")
+    with st.form("set_goal_form", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            emp_id = st.number_input("Employee ID", min_value=1, step=1)
+        with col2:
+            goal_desc = st.text_area("Goal Description")
+            goal_due_date = st.date_input("Due Date", min_value=date.today())
+        
+        submitted = st.form_submit_button("Set Goal")
+        if submitted:
+            if backend.create_goal(emp_id, manager_id, goal_desc, goal_due_date):
+                st.success(f"Goal for Employee {emp_id} set successfully!")
+            else:
+                st.error("Failed to set goal. Check Employee ID and database connection.")
+
+    st.subheader("View and Update Goals")
+    all_goals = backend.get_goals(employee_id) # Fetch all goals to show
+    if all_goals:
+        goal_to_update = st.selectbox(
+            "Select a goal to update status:",
+            options=[g['goal_id'] for g in all_goals],
+            format_func=lambda x: f"Goal ID: {x} - {next(g['description'] for g in all_goals if g['goal_id'] == x)[:50]}..."
+        )
+        new_status = st.selectbox(
+            "New Status",
+            options=['Draft', 'In Progress', 'Completed', 'Cancelled']
+        )
+        if st.button("Update Goal Status"):
+            if backend.update_goal_status(goal_to_update, new_status):
+                st.success(f"Goal {goal_to_update} status updated to `{new_status}`.")
+            else:
+                st.error("Failed to update goal status.")
+        
+        st.subheader("Provide Feedback")
+        feedback_goal_id = st.selectbox(
+            "Select a goal to provide feedback:",
+            options=[g['goal_id'] for g in all_goals],
+            format_func=lambda x: f"Goal ID: {x}"
+        )
+        feedback_text = st.text_area("Your Feedback")
+        if st.button("Submit Feedback"):
+            if backend.create_feedback(feedback_goal_id, manager_id, feedback_text):
+                st.success("Feedback submitted successfully!")
+            else:
+                st.error("Failed to submit feedback.")
+    else:
+        st.info("No goals to manage.")
+
+# --- Manage Tasks Section (Employee View) ---
+elif menu_selection == "Manage Tasks":
+    st.header("Employee: Manage My Tasks")
+    st.write(f"Logged in as Employee ID: **{employee_id}**")
+
+    st.subheader("Add a New Task")
+    my_goals = backend.get_goals(employee_id)
+    if my_goals:
+        goal_for_task = st.selectbox(
+            "Select a goal to add a task to:",
+            options=[g['goal_id'] for g in my_goals],
+            format_func=lambda x: f"Goal ID: {x} - {next(g['description'] for g in my_goals if g['goal_id'] == x)[:50]}..."
+        )
+        task_desc = st.text_area("Task Description")
+        if st.button("Add Task"):
+            if backend.create_task(goal_for_task, employee_id, task_desc):
+                st.success("Task added successfully!")
+            else:
+                st.error("Failed to add task.")
+    else:
+        st.info("You need to have goals before you can add tasks.")
+
+    st.subheader("Update Task Status")
+    all_tasks = backend.get_tasks_by_employee(employee_id)
+    if all_tasks:
+        task_to_update = st.selectbox(
+            "Select a task to update:",
+            options=[t['task_id'] for t in all_tasks],
+            format_func=lambda x: f"Task ID: {x} - {next(t['description'] for t in all_tasks if t['task_id'] == x)[:50]}..."
+        )
+        new_task_status = st.selectbox(
+            "New Task Status",
+            options=['To Do', 'In Progress', 'Completed', 'Cancelled']
+        )
+        if st.button("Update Task Status"):
+            if backend.update_task_status(task_to_update, new_task_status):
+                st.success("Task status updated successfully!")
+            else:
+                st.error("Failed to update task status.")
+    else:
+        st.info("No tasks to update.")
+
+
+# --- Business Insights Section ---
+elif menu_selection == "Business Insights":
+    st.header("Business Insights Dashboard")
+    st.markdown("Key performance metrics using aggregated data.")
+
+    # KPI Cards
+    st.markdown("### Key Performance Indicators")
+    col1, col2, col3 = st.columns(3)
+
+    # Total Employees (COUNT)
+    total_employees = backend.get_employee_count()
+    col1.metric(label="Total Employees", value=total_employees)
+
+    # Average Goals per Employee (AVG)
+    avg_goals = backend.get_avg_goals_per_employee()
+    col2.metric(label="Average Goals per Employee", value=f"{avg_goals:.2f}")
+
+    # Goal Status Breakdown (COUNT, SUM)
+    st.markdown("### Goal Status Distribution")
+    goal_counts = backend.get_goal_status_counts()
+    if goal_counts:
+        total_goals = sum(goal_counts.values())
+        for status, count in goal_counts.items():
+            st.write(f"- `{status}`: {count} goals (`{count/total_goals:.1%}`)")
+    else:
+        st.info("No goal data available for insights.")
