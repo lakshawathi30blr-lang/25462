@@ -1,0 +1,327 @@
+import psycopg2
+from datetime import date
+from typing import List, Dict
+
+# Database connection details
+DB_HOST = "localhost"
+DB_NAME = "PMS"
+DB_USER = "postgres"
+DB_PASS = "Laksha@2312"
+
+def get_db_connection():
+    """Establishes and returns a new database connection."""
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS
+        )
+        return conn
+    except psycopg2.Error as e:
+        print(f"Error connecting to database: {e}")
+        return None
+
+# --- CREATE Operations ---
+
+def create_employee(name: str, manager_id: int = None, email: str = None) -> bool:
+    """Creates a new employee record."""
+    conn = get_db_connection()
+    if conn is None: return False
+    try:
+        cur = conn.cursor()
+        if manager_id:
+            cur.execute(
+                "INSERT INTO employees (employee_name, manager_id, email) VALUES (%s, %s, %s)",
+                (name, manager_id, email)
+            )
+        else:
+            cur.execute(
+                "INSERT INTO employees (employee_name, email) VALUES (%s, %s)",
+                (name, email)
+            )
+        conn.commit()
+        return True
+    except psycopg2.Error as e:
+        print(f"Error creating employee: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def create_goal(employee_id: int, manager_id: int, description: str, due_date: date) -> bool:
+    """Creates a new goal for an employee."""
+    conn = get_db_connection()
+    if conn is None: return False
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO goals (employee_id, manager_id, description, due_date, status) VALUES (%s, %s, %s, %s, %s)",
+            (employee_id, manager_id, description, due_date, 'Draft')
+        )
+        conn.commit()
+        return True
+    except psycopg2.Error as e:
+        print(f"Error creating goal: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def create_task(goal_id: int, employee_id: int, description: str) -> bool:
+    """Creates a new task associated with a goal."""
+    conn = get_db_connection()
+    if conn is None: return False
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO tasks (goal_id, employee_id, description, status) VALUES (%s, %s, %s, %s)",
+            (goal_id, employee_id, description, 'To Do')
+        )
+        conn.commit()
+        return True
+    except psycopg2.Error as e:
+        print(f"Error creating task: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def create_feedback(goal_id: int, manager_id: int, feedback_text: str) -> bool:
+    """Creates new feedback for a goal."""
+    conn = get_db_connection()
+    if conn is None: return False
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO feedback (goal_id, manager_id, feedback_text) VALUES (%s, %s, %s)",
+            (goal_id, manager_id, feedback_text)
+        )
+        conn.commit()
+        return True
+    except psycopg2.Error as e:
+        print(f"Error creating feedback: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+# --- READ Operations ---
+
+def get_employee(employee_id: int) -> Dict:
+    """Retrieves an employee's details."""
+    conn = get_db_connection()
+    if conn is None: return {}
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM employees WHERE employee_id = %s", (employee_id,))
+        record = cur.fetchone()
+        if record:
+            return {
+                "employee_id": record[0],
+                "employee_name": record[1],
+                "manager_id": record[2],
+                "email": record[3]
+            }
+        return {}
+    except psycopg2.Error as e:
+        print(f"Error reading employee: {e}")
+        return {}
+    finally:
+        conn.close()
+
+def get_goals(employee_id: int) -> List[Dict]:
+    """Retrieves all goals for a specific employee."""
+    conn = get_db_connection()
+    if conn is None: return []
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM goals WHERE employee_id = %s", (employee_id,))
+        records = cur.fetchall()
+        goals = []
+        for rec in records:
+            goals.append({
+                "goal_id": rec[0],
+                "employee_id": rec[1],
+                "manager_id": rec[2],
+                "description": rec[3],
+                "due_date": rec[4],
+                "status": rec[5]
+            })
+        return goals
+    except psycopg2.Error as e:
+        print(f"Error reading goals: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_tasks(goal_id: int) -> List[Dict]:
+    """Retrieves all tasks for a specific goal."""
+    conn = get_db_connection()
+    if conn is None: return []
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM tasks WHERE goal_id = %s", (goal_id,))
+        records = cur.fetchall()
+        tasks = []
+        for rec in records:
+            tasks.append({
+                "task_id": rec[0],
+                "goal_id": rec[1],
+                "employee_id": rec[2],
+                "description": rec[3],
+                "status": rec[4]
+            })
+        return tasks
+    except psycopg2.Error as e:
+        print(f"Error reading tasks: {e}")
+        return []
+    finally:
+        conn.close()
+
+def get_feedback(goal_id: int) -> List[Dict]:
+    """Retrieves all feedback for a specific goal."""
+    conn = get_db_connection()
+    if conn is None: return []
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM feedback WHERE goal_id = %s", (goal_id,))
+        records = cur.fetchall()
+        feedback_list = []
+        for rec in records:
+            feedback_list.append({
+                "feedback_id": rec[0],
+                "goal_id": rec[1],
+                "manager_id": rec[2],
+                "feedback_text": rec[3],
+                "timestamp": rec[4]
+            })
+        return feedback_list
+    except psycopg2.Error as e:
+        print(f"Error reading feedback: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+# --- UPDATE Operations ---
+
+def update_goal_status(goal_id: int, status: str) -> bool:
+    """Updates the status of a goal. Allowed for managers only."""
+    conn = get_db_connection()
+    if conn is None: return False
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE goals SET status = %s WHERE goal_id = %s", (status, goal_id))
+        conn.commit()
+        return True
+    except psycopg2.Error as e:
+        print(f"Error updating goal status: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def update_task_status(task_id: int, status: str) -> bool:
+    """Updates the status of a task."""
+    conn = get_db_connection()
+    if conn is None: return False
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE tasks SET status = %s WHERE task_id = %s", (status, task_id))
+        conn.commit()
+        return True
+    except psycopg2.Error as e:
+        print(f"Error updating task status: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+# --- DELETE Operations ---
+
+def delete_goal(goal_id: int) -> bool:
+    """Deletes a goal and its associated tasks/feedback due to CASCADE."""
+    conn = get_db_connection()
+    if conn is None: return False
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM goals WHERE goal_id = %s", (goal_id,))
+        conn.commit()
+        return True
+    except psycopg2.Error as e:
+        print(f"Error deleting goal: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+def delete_task(task_id: int) -> bool:
+    """Deletes a task."""
+    conn = get_db_connection()
+    if conn is None: return False
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM tasks WHERE task_id = %s", (task_id,))
+        conn.commit()
+        return True
+    except psycopg2.Error as e:
+        print(f"Error deleting task: {e}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
+
+# --- Business Insights ---
+
+def get_employee_count() -> int:
+    """Returns the total number of employees."""
+    conn = get_db_connection()
+    if conn is None: return 0
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM employees")
+        return cur.fetchone()[0]
+    except psycopg2.Error as e:
+        print(f"Error getting employee count: {e}")
+        return 0
+    finally:
+        conn.close()
+
+def get_goal_status_counts() -> Dict:
+    """Returns the count of goals for each status."""
+    conn = get_db_connection()
+    if conn is None: return {}
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT status, COUNT(*) FROM goals GROUP BY status")
+        return dict(cur.fetchall())
+    except psycopg2.Error as e:
+        print(f"Error getting goal status counts: {e}")
+        return {}
+    finally:
+        conn.close()
+
+def get_avg_goals_per_employee() -> float:
+    """Calculates the average number of goals per employee."""
+    conn = get_db_connection()
+    if conn is None: return 0.0
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT AVG(goal_count) FROM (
+                SELECT COUNT(*) AS goal_count
+                FROM goals
+                GROUP BY employee_id
+            ) AS subquery
+        """)
+        result = cur.fetchone()
+        return result[0] if result and result[0] is not None else 0.0
+    except psycopg2.Error as e:
+        print(f"Error getting average goals: {e}")
+        return 0.0
+    finally:
+        conn.close()
